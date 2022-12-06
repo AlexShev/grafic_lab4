@@ -14,6 +14,11 @@ public class Math2d
         return Math.Abs(a - b) < 1e-9;
     }
 
+    public static bool AreEqual(PointF a, PointF b)
+    {
+        return new Segment(a, b).Lenght < 1;
+    }
+
     public static float Average(float a, float b)
     {
         return (a + b) / 2;

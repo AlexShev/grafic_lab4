@@ -46,7 +46,25 @@ public class GeometryImage
                 }
                 else
                 {
-                    InvisiblePolygons.Add(VisiblePolygons[i]);
+                    bool isVisible = false;
+
+                    for (int j = 0; j < VisiblePolygons[i].Size; j++)
+                    {
+                        if (!polygon.IsInside(VisiblePolygons[i].GetPoint(j)))
+                        {
+                            isVisible = true;
+                            break;
+                        }
+                    }
+
+                    if (isVisible)
+                    {
+                        layerVisiblePolygons.Add(VisiblePolygons[i]);
+                    }
+                    else
+                    {
+                        InvisiblePolygons.Add(VisiblePolygons[i]);
+                    }
                 }
             }
             else
@@ -105,6 +123,7 @@ public class GeometryImage
 
     public void SetBackground(Color background)
     {
+
         Background = background;
     }
 }

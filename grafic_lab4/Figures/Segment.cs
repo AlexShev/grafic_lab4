@@ -69,6 +69,11 @@ public class Segment
         return res;
     }
 
+    public PointF Morph(float t)
+    {
+        return A.Add(Direction.Mul(t));
+    }
+
     public double Lenght
     {
         get

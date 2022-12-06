@@ -17,8 +17,9 @@ public class PolygonWithSegments : IMovable
         Segments = segments;
     }
 
-    public void MoveTo(PointF leftTopCorner)
+    public void MoveTo(float leftX, float topY)
     {
+        PointF leftTopCorner = new PointF(leftX, topY);
         var derection = leftTopCorner.Sub(Polygon.GetLeftButtonCorner());
 
         Polygon.Offset(derection);

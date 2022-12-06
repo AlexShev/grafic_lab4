@@ -4,7 +4,7 @@ public class FigureMover
 {
     public interface IMovable
     {
-        public void MoveTo(PointF point);
+        public void MoveTo(float leftX, float topY);
     }
 
     private readonly IMovable movable;
@@ -14,8 +14,8 @@ public class FigureMover
         this.movable = movable;
     }
 
-    public void MoveTo(PointF point)
+    public void MoveTo(float leftX, float topY)
     {
-        movable.MoveTo(point);
+        movable.MoveTo(leftX, topY);
     }
 }
