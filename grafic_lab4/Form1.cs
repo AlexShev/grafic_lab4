@@ -1,7 +1,5 @@
-using grafic_lab4.CrossInspectors;
 using grafic_lab4.Figures;
 using grafic_lab4.Image;
-using System.Drawing;
 
 namespace grafic_lab4;
 
@@ -38,7 +36,7 @@ public partial class Form1 : Form
             Polygon polygon = new Polygon(polylins[i]);
             polygon.Color = colors[i];
 
-            var polygonWithSegments =  PolygonWithSegments.Create(polygon);
+            var polygonWithSegments = PolygonWithSegments.Create(polygon);
             _figureMovers[i] = new FigureMover(polygonWithSegments);
 
             _layers.AddLayer(new PolygonLayer(polygonWithSegments));
@@ -52,6 +50,10 @@ public partial class Form1 : Form
     {
         List<PointF>[] polylins = new List<PointF>[]
         {
+            // new List<PointF> { new PointF(50, 200), new PointF(0, 80), new PointF(100, 100) },
+
+            // new List<PointF> { new PointF(0, 100), new PointF(100, 100), new PointF(50, 200) },
+
             new List<PointF> { new PointF(200, 55), new PointF(350, 200), new PointF(350, 400), new PointF(200, 500), new PointF(50, 400), new PointF(50, 205) },
             new List<PointF> { new PointF(200, 0), new PointF(400, 200), new PointF(200, 400), new PointF(0, 200) },
             new List<PointF> { new PointF(50, 120), new PointF(350, 120), new PointF(200, 350) },
@@ -64,7 +66,9 @@ public partial class Form1 : Form
             Color.Blue,
             Color.Yellow,
             Color.Green,
-            Color.Violet
+            Color.Violet,
+            Color.Gold,
+            Color.Orange
         };
 
         return (polylins, colors);
@@ -77,6 +81,6 @@ public partial class Form1 : Form
             _figureMovers[i].MoveTo((float)_figureMoveControls[i].X, (float)_figureMoveControls[i].Y);
         }
 
-        pictureBox1.Image = new Printer(_layers.Create(), true).Image;
+        pictureBox1.Image = new Printer(_layers.Create(pictureBox1.Width, pictureBox1.Height), pictureBox1.Width, pictureBox1.Height, checkBox1.Checked).Image;
     }
 }

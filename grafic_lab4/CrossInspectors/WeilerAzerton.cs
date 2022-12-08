@@ -1,5 +1,4 @@
 ﻿using grafic_lab4.Figures;
-using System.Linq;
 
 namespace grafic_lab4.CrossInspectors;
 
@@ -8,7 +7,12 @@ public class WeilerAzerton
     private Polygon lower;
     private Polygon upper;
 
+    private HashSet<PointF> inPoints = new HashSet<PointF>();
+    private HashSet<PointF> outPoints = new HashSet<PointF>();
+
+
     public bool IsClip { get; private set; }
+    public bool IsLowerInUpper { get; private set; }
 
     public List<Polygon> VisiblePolygons { get; private set; }
     public List<List<Segment>> InvisibleLines { get; private set; }
@@ -17,7 +21,8 @@ public class WeilerAzerton
     {
         VisiblePolygons = new List<Polygon>();
         InvisibleLines = new List<List<Segment>>();
-
+        
+        IsLowerInUpper = false;
         IsClip = IntersectedPoint(lower, upper);
     }
 
@@ -27,14 +32,12 @@ public class WeilerAzerton
         lower = lowerOrigin.Clone();
 
         // каждый список - точки пересечения для определённой стороны
-        var intersectionsLower = CreateArrayList<PointF>(lower.Size);
-        var intersectionsUpper = CreateArrayList<PointF>(upper.Size);
+        var intersectionsLower = CreateArray<HashSet<PointF>>(lower.Size);
+        var intersectionsUpper = CreateArray<HashSet<PointF>>(upper.Size);
+        
+        FindIntersections(intersectionsLower, intersectionsUpper);
 
-        HashSet<PointF> pointsOnEdge = new HashSet<PointF>();
-        HashSet<PointF> pointsOnLower = new HashSet<PointF>();
-        (int interCounter, int pointCounter) = FindIntersections(intersectionsLower, intersectionsUpper, pointsOnEdge, pointsOnLower);
-
-        if (interCounter == 0 && pointCounter == 0)
+        if (IsLowerInUpper)
         {
             return false;
         }
@@ -42,45 +45,31 @@ public class WeilerAzerton
         InsertIntersections(lower, intersectionsLower);
         InsertIntersections(upper, intersectionsUpper);
 
-        HashSet<PointF> inPoints = new HashSet<PointF>();
-        HashSet<PointF> outPoints = new HashSet<PointF>();
-
-        inPoints = inPoints.Concat(pointsOnEdge).ToHashSet();
-        outPoints = outPoints.Concat(pointsOnEdge).ToHashSet();
-
-        FindInOutPoints(lowerOrigin, upper, intersectionsLower, inPoints, outPoints);
-
         if (!inPoints.Any() && !outPoints.Any())
         {
             return false;
         }
 
-
+        // в алгоритме что-то не то
         if (inPoints.Count != outPoints.Count)
         {
             return false;
         }
 
-        if (pointsOnEdge.Count == inPoints.Count)
-        {
-            return false;
-        }
-
-
         Dictionary<PointF, int> pointsIndexLower = CreatePointIndexe(lower);
         Dictionary<PointF, int> pointsIndexUpper = CreatePointIndexe(upper);
 
-        ClipLower(inPoints, outPoints, pointsIndexLower, pointsIndexUpper, pointsOnLower);
+        ClipLower(inPoints, outPoints, pointsIndexLower, pointsIndexUpper);
 
-        FindInvisibleSegments(inPoints, outPoints, pointsOnEdge);
+        FindInvisibleSegments(inPoints, outPoints);
 
         return true;
     }
 
-    private (int, int) FindIntersections(List<PointF>[] intersectionsLower, List<PointF>[] intersectionsUpper, HashSet<PointF> pointsOnEdge, HashSet<PointF> pointsOnUpper)
+    private void FindIntersections(HashSet<PointF>[] intersectionsLower, HashSet<PointF>[] intersectionsUpper)
     {
-        int interCounter = 0;
-        int pointCounter = 0;
+        int tA_0_counter = 0;
+        int tB_1_counter = 0;
 
         for (int i = 0; i < lower.Size; i++)
         {
@@ -88,92 +77,145 @@ public class WeilerAzerton
 
             CyrusBeckClip cyrusBeckClip = new CyrusBeckClip(edge, upper);
 
+            if (Math2d.AreEqual(cyrusBeckClip.tA, Segment.BEGIN))
+            {
+                ++tA_0_counter;
+            }
+            if (Math2d.AreEqual(cyrusBeckClip.tB, Segment.END))
+            {
+                ++tB_1_counter;
+            }
+
+
             if (Math2d.AreEqual(cyrusBeckClip.tA, cyrusBeckClip.tB))
             {
-                if (cyrusBeckClip.tA == Segment.BEGIN)
+                if (Math2d.AreEqual(cyrusBeckClip.tA, Segment.BEGIN))
                 {
-                    pointsOnEdge.Add(edge.A);
+                    inPoints.Add(edge.A);
 
-                    ++pointCounter;
+                    int index = cyrusBeckClip.IndexCrosingPolygonA;
+
+                    if (index == -1)
+                    {
+                        index = cyrusBeckClip.IndexCrosingPolygonB;
+                    }
+
+                    intersectionsUpper[index].Add(edge.A);
                 }
-                else if (cyrusBeckClip.tB == Segment.END)
+                else if (Math2d.AreEqual(cyrusBeckClip.tB, Segment.END))
                 {
-                    pointsOnEdge.Add(edge.B);
+                    outPoints.Add(edge.B);
 
-                    ++pointCounter;
+                    int index = cyrusBeckClip.IndexCrosingPolygonB;
+
+                    if (index == -1)
+                    {
+                        index = cyrusBeckClip.IndexCrosingPolygonA;
+                    }
+
+                    intersectionsUpper[index].Add(edge.B);
                 }
                 else
                 {
                     PointF point = edge.Morph(cyrusBeckClip.tA);
 
-                    pointsOnEdge.Add(point);
-                    intersectionsLower[i].Add(point);
+                    outPoints.Add(point);
+                    inPoints.Add(point);
 
-                    ++pointCounter;
+                    intersectionsLower[i].Add(point);
                 }
 
                 continue;
             }
-            
+
             if (cyrusBeckClip.IsClip)
             {
-                Segment? firstVisibleSeg = cyrusBeckClip.GetFirstClipSegment();
-                Segment? secondVisibleSeg = cyrusBeckClip.GetSecondClipSegment();
-
-                if (firstVisibleSeg != null)
+                // проверка что конец принадлежит ребру
+                if (Math2d.AreEqual(cyrusBeckClip.tA, Segment.BEGIN))
                 {
-                    ++interCounter;
-                    intersectionsLower[i].Add(firstVisibleSeg.B);
-                    intersectionsUpper[cyrusBeckClip.IndexCrosingPolygonA].Add(firstVisibleSeg.B);
+                    if (cyrusBeckClip.IndexCrosingPolygonA != -1)
+                    {
+                        double d = Math2d.DistanceToSegment(edge.A, upper.GetEdge(cyrusBeckClip.IndexCrosingPolygonA));
+
+                        if (Math2d.AreEqual(d, 0))
+                        {
+                            intersectionsUpper[cyrusBeckClip.IndexCrosingPolygonA].Add(edge.A);
+                            outPoints.Add(edge.A);
+                        }
+                    }
+                }
+                else
+                {
+                    var point = edge.Morph(cyrusBeckClip.tA);
+
+                    outPoints.Add(point);
+                    intersectionsLower[i].Add(point);
+
+                    int index = cyrusBeckClip.IndexCrosingPolygonA;
+
+                    if (index == -1)
+                    {
+                        index = cyrusBeckClip.IndexCrosingPolygonB;
+                    }
+
+                    // проследить чтоб не добавилась точки верхнего!
+                    intersectionsUpper[index].Add(point);
                 }
 
-                if (secondVisibleSeg != null)
+
+                // проверка что конец принадлежит ребру
+                if (Math2d.AreEqual(cyrusBeckClip.tB, Segment.END))
                 {
-                    ++interCounter;
-                    intersectionsLower[i].Add(secondVisibleSeg.A);
-                    intersectionsUpper[cyrusBeckClip.IndexCrosingPolygonB].Add(secondVisibleSeg.A);
+                    int index = cyrusBeckClip.IndexCrosingPolygonB;
+
+                    //if (index == -1)
+                    //{
+                    //    index = cyrusBeckClip.IndexCrosingPolygonA;
+                    //}
+
+                    if (index != -1)
+                    {
+                        double d = Math2d.DistanceToSegment(edge.B, upper.GetEdge(index));
+
+                        if (Math2d.AreEqual(d, 0))
+                        {
+                            intersectionsUpper[index].Add(edge.B);
+                            inPoints.Add(edge.B);
+                        }
+                    }
+                }
+                else
+                {
+                    var point = edge.Morph(cyrusBeckClip.tB);
+
+                    inPoints.Add(point);
+                    intersectionsLower[i].Add(point);
+
+                    int index = cyrusBeckClip.IndexCrosingPolygonB;
+
+                    if (index == -1)
+                    {
+                        index = cyrusBeckClip.IndexCrosingPolygonA;
+                    }
+
+                    intersectionsUpper[index].Add(point);
                 }
             }
-            
-            if (Math2d.AreEqual(cyrusBeckClip.tA, Segment.BEGIN) && cyrusBeckClip.IndexCrosingPolygonA != -1)
-            {
-                double d = Math2d.DistanceToSegment(edge.A, upper.GetEdge(cyrusBeckClip.IndexCrosingPolygonA));
-
-                if (Math2d.AreEqual(d, 0) && !pointsOnEdge.Contains(edge.A))
-                {
-                    pointsOnEdge.Add(edge.A);
-                    ++pointCounter;
-                    intersectionsUpper[cyrusBeckClip.IndexCrosingPolygonA].Add(edge.A);
-                    pointsOnUpper.Add(edge.A);
-                }
-            }
-
-            //if (Math2d.AreEqual(cyrusBeckClip.tB, Segment.END) && cyrusBeckClip.IndexCrosingPolygonB != -1)
-            //{
-            //    double d = Math2d.DistanceToSegment(edge.B, upper.GetEdge(cyrusBeckClip.IndexCrosingPolygonB));
-
-            //    if (Math2d.AreEqual(d, 0)/* && ! added.Contains(edge.B)*/)
-            //    {
-            //        //added.Add(edge.B);
-            //        ++pointCounter;
-            //        intersectionsLower[i].Add(edge.B);
-            //        intersectionsUpper[cyrusBeckClip.IndexCrosingPolygonB].Add(edge.B);
-            //    }
-            //}
         }
 
-        return (interCounter, pointCounter);
+        IsLowerInUpper = tA_0_counter ==tB_1_counter && tA_0_counter == lower.Size;
     }
 
-    private void FindInvisibleSegments(HashSet<PointF> inPoints, HashSet<PointF> outPoints, HashSet<PointF> pointsOnEdge)
+    private void FindInvisibleSegments(HashSet<PointF> inPoints, HashSet<PointF> outPoints)
     {
         for (int invisibleLowIndex = 0; invisibleLowIndex < lower.Size; ++invisibleLowIndex)
         {
-            if (!pointsOnEdge.Contains(lower.GetPoint(invisibleLowIndex)) && outPoints.Contains(lower.GetPoint(invisibleLowIndex)))
+            if (outPoints.Contains(lower.GetPoint(invisibleLowIndex)) && !inPoints.Contains(lower.GetPoint(invisibleLowIndex)))
             {
                 List<Segment> invisibleLine = new List<Segment>();
-                
-                do
+
+                while (!inPoints.Contains(lower.GetPoint(invisibleLowIndex)) 
+                    || inPoints.Contains(lower.GetPoint(invisibleLowIndex)) && outPoints.Contains(lower.GetPoint(invisibleLowIndex)))
                 {
                     Segment segment = lower.GetEdge(invisibleLowIndex);
                     segment.Color = lower.Color;
@@ -181,7 +223,7 @@ public class WeilerAzerton
                     invisibleLine.Add(segment);
 
                     ++invisibleLowIndex;
-                } while (pointsOnEdge.Contains(lower.GetPoint(invisibleLowIndex)) || !inPoints.Contains(lower.GetPoint(invisibleLowIndex))) ;
+                }
 
                 if (invisibleLine.Any())
                 {
@@ -192,69 +234,16 @@ public class WeilerAzerton
         }
     }
 
-    private static List<T>[] CreateArrayList<T>(int size)
+    private static T [] CreateArray<T>(int size) where T : new()
     {
-        List<T>[] res = new List<T>[size];
+        T[] res = new T[size];
 
         for (int i = 0; i < size; i++)
         {
-            res[i] = new List<T>();
+            res[i] = new T();
         }
 
         return res;
-    }
-
-    private static void FindInOutPoints(Polygon lowerOrigin, Polygon upperWithIntersection, List<PointF>[] intersectionsLower, HashSet<PointF> inPoints, HashSet<PointF> outPoints)
-    {
-        int lowerEdgeIndex = 0;
-
-        for (int i = 0; i < intersectionsLower.Length; i++)
-        {
-            intersectionsLower[i].Reverse();
-        }
-
-        while (lowerEdgeIndex < intersectionsLower.Length && intersectionsLower[lowerEdgeIndex].Count == 0)
-        {
-            ++lowerEdgeIndex;
-        }
-
-        if (lowerEdgeIndex >= intersectionsLower.Length)
-        {
-            return;
-        }
-
-        int upperEdgeIndex = 0;
-        PointF firstIntersections = intersectionsLower[lowerEdgeIndex][0];
-
-        for (; upperEdgeIndex < upperWithIntersection.Size; upperEdgeIndex++)
-        {
-            if (firstIntersections == upperWithIntersection.GetPoint(upperEdgeIndex))
-            {
-                break;
-            }
-        }
-
-        bool isIn = upperWithIntersection.GetEdge(upperEdgeIndex).Normal.Dot(lowerOrigin.GetEdge(lowerEdgeIndex).Direction) > 0;
-
-        for (int lowerEdge = lowerEdgeIndex; lowerEdge < intersectionsLower.Length; lowerEdge++)
-        {
-            foreach (PointF lowerEdgeIntersection in intersectionsLower[lowerEdge])
-            {
-                if (!inPoints.Contains(lowerEdgeIntersection) && !outPoints.Contains(lowerEdgeIntersection))
-                {
-                    if (isIn)
-                    {
-                        inPoints.Add(lowerEdgeIntersection);
-                    }
-                    else
-                    {
-                        outPoints.Add(lowerEdgeIntersection);
-                    }
-
-                    isIn = !isIn;
-                }
-            }
-        }
     }
 
     private Dictionary<PointF, int> CreatePointIndexe(Polygon polygon)
@@ -269,28 +258,36 @@ public class WeilerAzerton
         return res;
     }
 
-    private void ClipLower(HashSet<PointF> inPoints, HashSet<PointF> outPoints, Dictionary<PointF, int> pointsIndexLower, Dictionary<PointF, int> pointsIndexUpper, HashSet<PointF> pointsOnUpper)
+    private void ClipLower(HashSet<PointF> inPoints, HashSet<PointF> outPoints, Dictionary<PointF, int> pointsIndexLower, Dictionary<PointF, int> pointsIndexUpper)
     {
         inPoints = new HashSet<PointF>(inPoints);
         outPoints = new HashSet<PointF>(outPoints);
 
         while (inPoints.Any() && outPoints.Any())
         {
-            PointF begin = outPoints.First();
+            PointF begin = inPoints.First();
 
-            foreach (PointF point in outPoints)
-            {
-                if (!pointsOnUpper.Contains(point))
-                {
-                    begin = point;
-                    
-                    break;
-                }
-            }
+            //int i = 0;
+            //foreach (var point in inPoints)
+            //{
+            //    if (! outPoints.Contains(point))
+            //    {
+            //        begin = point;
+            //        break;
+            //    }
+
+            //    ++i;
+            //}
+
+            //if (i == inPoints.Count)
+            //{
+            //    break;
+            //}
 
             int beginIndex = pointsIndexLower[begin];
+            
+            int upperIndex = 0;
             int lowerIndex = beginIndex;
-
             // отсечённая фигура
             List<PointF> figure = new List<PointF>();
 
@@ -299,43 +296,45 @@ public class WeilerAzerton
                 PointF currPoint = lower.GetPoint(lowerIndex);
 
                 // обход по контурам фигуры lower
-                do {
+                do
+                {
                     figure.Add(currPoint);
 
-                    --lowerIndex;
-
-                    if (lowerIndex < 0)
-                    {
-                        lowerIndex = lower.Size - 1;
-                    }
+                    lowerIndex = (lowerIndex + 1) % lower.Size;
 
                     currPoint = lower.GetPoint(lowerIndex);
                 }
-                while (!inPoints.Contains(currPoint) && inPoints.Any()) ;
+                while (!outPoints.Contains(currPoint) && outPoints.Any());
 
-                inPoints.Remove(currPoint);
+                outPoints.Remove(currPoint);
 
-                int upperIndex = pointsIndexUpper[currPoint];
+                upperIndex = pointsIndexUpper[currPoint];
 
-                currPoint = upper.GetPoint(upperIndex);
+                currPoint = lower.GetPoint(lowerIndex);
 
                 // обход по контурам фигур upper
-                while (!outPoints.Contains(currPoint) && outPoints.Any())
+                do
                 {
-                    figure.Add(upper.GetPoint(upperIndex));
+                    figure.Add(currPoint);
 
-                    upperIndex = (upperIndex + 1) % upper.Size;
+                    --upperIndex;
+
+                    if (upperIndex < 0)
+                    {
+                        upperIndex = upper.Size - 1;
+                    }
 
                     currPoint = upper.GetPoint(upperIndex);
                 }
+                while (!inPoints.Contains(currPoint) && inPoints.Any());
 
-                outPoints.Remove(currPoint);
+                inPoints.Remove(currPoint);
 
                 lowerIndex = pointsIndexLower[currPoint];
 
             } while (beginIndex != lowerIndex);
 
-            if (figure.Any())
+            if (figure.Count > 2)
             {
                 figure.Reverse();
                 Polygon visiblePolygon = new Polygon(figure);
@@ -345,7 +344,7 @@ public class WeilerAzerton
         }
     }
 
-    private static int InsertIntersections(Polygon polygon, List<PointF>[] intersections)
+    private static int InsertIntersections(Polygon polygon, HashSet<PointF>[] intersections)
     {
         int count = 0;
 
@@ -361,7 +360,8 @@ public class WeilerAzerton
             int xDirectionSort = -Math.Sign(direction.X);
             int yDirectionSort = -Math.Sign(direction.Y);
 
-            intersections[i].Sort(Comparer<PointF>.Create((first, second) =>
+            var pointsOnSegment = intersections[i].ToList();
+            pointsOnSegment.Sort(Comparer<PointF>.Create((first, second) =>
             {
                 int res = xDirectionSort * first.X.CompareTo(second.X);
 
@@ -375,9 +375,9 @@ public class WeilerAzerton
 
             for (int j = 0; j < intersections[i].Count; j++)
             {
-                if (polygon.GetPoint(i) != intersections[i][j] && polygon.GetPoint(i + 1) != intersections[i][j])
+                if (polygon.GetPoint(i) != pointsOnSegment[j] && polygon.GetPoint(i + 1) != pointsOnSegment[j])
                 {
-                    polygon.AddAfter(i, intersections[i][j]);
+                    polygon.AddAfter(i, pointsOnSegment[j]);
                     ++count;
                 }
             }
@@ -463,49 +463,4 @@ public class WeilerAzerton
     }
  */
 
-
-//private static void FindInOutPoints(Polygon upperOriginal, Polygon lowerWithIntersection, List<PointF>[] intersectionsUpper, HashSet<PointF> inPoints, HashSet<PointF> outPoints)
-//{
-//    int upperEdgeIndex = 0;
-
-//    for (int i = 0; i < intersectionsUpper.Length; i++)
-//    {
-//        intersectionsUpper[i].Reverse();
-//    }
-
-//    while (upperEdgeIndex < intersectionsUpper.Length && intersectionsUpper[upperEdgeIndex].Count == 0)
-//    {
-//        ++upperEdgeIndex;
-//    }
-
-//    int lowerEdgeIndex = 0;
-//    PointF firstIntersections = intersectionsUpper[upperEdgeIndex][0];
-
-//    for (; lowerEdgeIndex < lowerWithIntersection.Size; lowerEdgeIndex++)
-//    {
-//        if (firstIntersections == lowerWithIntersection.GetPoint(lowerEdgeIndex))
-//        {
-//            break;
-//        }
-//    }
-
-//    bool isIn = lowerWithIntersection.GetEdge(lowerEdgeIndex).Normal.Dot(upperOriginal.GetEdge(upperEdgeIndex).Direction) < 0;
-
-//    for (int lowerEdge = upperEdgeIndex; lowerEdge < intersectionsUpper.Length; lowerEdge++)
-//    {
-//        foreach (PointF lowerEdgeIntersection in intersectionsUpper[lowerEdge])
-//        {
-//            if (isIn)
-//            {
-//                inPoints.Add(lowerEdgeIntersection);
-//            }
-//            else
-//            {
-//                outPoints.Add(lowerEdgeIntersection);
-//            }
-
-//            isIn = !isIn;
-//        }
-//    }
-//}
 

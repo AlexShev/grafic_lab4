@@ -14,9 +14,9 @@ public class LayerCollection
         layers.Add(layer);
     }
 
-    public GeometryImage Create()
+    public GeometryImage Create(int wight, int hight)
     {
-        GeometryImage image = new GeometryImage();
+        GeometryImage image = new GeometryImage(wight, hight);
 
         for (int i = 0; i < layers.Count; i++)
         {

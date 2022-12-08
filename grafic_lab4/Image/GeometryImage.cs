@@ -16,8 +16,11 @@ public class GeometryImage
 
     public Color Background;
 
-    public GeometryImage()
+    public GeometryImage(int wight, int hight)
     {
+        Wight = wight;
+        Hight = hight;
+
         VisiblePolygons = new List<Polygon>();
         VisibleSegments = new List<Segment>();
 
@@ -27,10 +30,6 @@ public class GeometryImage
 
     public void AddUpper(Polygon polygon)
     {
-        var maxCoordinat = polygon.GetRightTopCorner();
-        Hight = Math.Max(Hight, maxCoordinat.Y);
-        Wight = Math.Max(Wight, maxCoordinat.X);
-
         List<Polygon> layerVisiblePolygons = new List<Polygon>();
 
         for (int i = 0; i < VisiblePolygons.Count; i++)
@@ -44,27 +43,13 @@ public class GeometryImage
                     layerVisiblePolygons.AddRange(visiblePolygon.VisiblePolygons);
                     InvisibleLines.AddRange(visiblePolygon.InvisibleLines);
                 }
+                else if (visiblePolygon.IsLowerInUpper)
+                {
+                    InvisiblePolygons.Add(VisiblePolygons[i]);
+                }
                 else
                 {
-                    bool isVisible = false;
-
-                    for (int j = 0; j < VisiblePolygons[i].Size; j++)
-                    {
-                        if (!polygon.IsInside(VisiblePolygons[i].GetPoint(j)))
-                        {
-                            isVisible = true;
-                            break;
-                        }
-                    }
-
-                    if (isVisible)
-                    {
-                        layerVisiblePolygons.Add(VisiblePolygons[i]);
-                    }
-                    else
-                    {
-                        InvisiblePolygons.Add(VisiblePolygons[i]);
-                    }
+                    layerVisiblePolygons.Add(VisiblePolygons[i]);
                 }
             }
             else

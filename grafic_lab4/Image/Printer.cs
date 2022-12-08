@@ -6,7 +6,7 @@ public class Printer
 {
     public readonly Bitmap Image;
 
-    public Printer(GeometryImage image, bool withVisible)
+    public Printer(GeometryImage image, int wight, int hight, bool withVisible)
     {
         Image = new Bitmap((int)image.Wight, (int)image.Hight);
         Graphics graphics = Graphics.FromImage(Image);
